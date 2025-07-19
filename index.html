@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Infinity Racing Game</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+      color: white;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    canvas {
+      display: block;
+      background-color: #1a1a1a;
+    }
+    #leaderboard {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 15px;
+      border-radius: 5px;
+      font-size: 16px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="leaderboard"></div>
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const BASE_WIDTH = 1600;
+    const BASE_HEIGHT = 1000;
+    let scaleFactor = 1;
+    let gameStarted = false;
+
+    function resizeCanvas() {
+      const aspectRatio = BASE_WIDTH / BASE_HEIGHT;
+      let width = window.innerWidth;
+      let height = window.innerHeight;
+      if (width / height > aspectRatio) {
+        width = height * aspectRatio;
+      } else {
+        height = width / aspectRatio;
+      }
+      canvas.width = width;
+      canvas.height = height;
+      scaleFactor = width / BASE_WIDTH;
+      console.log("Canvas resized: ", canvas.width, canvas.height, scaleFactor);
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    const track = {
+      outerPath: new Path2D(),
+      innerPath: new Path2D(),
+      crossover: {
+        x: 800,
+        y: 500,
+        width: 130,
+        height: 130
+      },
+      startLine: { x1: 520, y1: 474.5, x2: 520, y2: 525.5 },
+      checkpoints: [],
+      init() {
+        const scale = 1.3;
+        const offsetX = (BASE_WIDTH - BASE_WIDTH * scale) / 2 + 160;
+        const offsetY = (BASE_HEIGHT - BASE_HEIGHT * scale) / 2 + 100;
+        
+        this.outerPath.moveTo(offsetX + 370 * scale, offsetY + 500 * scale);
+        this.outerPath.bezierCurveTo(
+          offsetX + 370 * scale, offsetY + 150 * scale,
+          offsetX + 700 * scale, offsetY + 150 * scale,
+          offsetX + 800 * scale, offsetY + 300 * scale
+        );
+        this.outerPath.bezierCurveTo(
+          offsetX + 900 * scale, offsetY + 150 * scale,
+          offsetX + 1230 * scale, offsetY + 150 * scale,
+          offsetX + 1230 * scale, offsetY + 500 * scale
+        );
+        this.outerPath.bezierCurveTo(
+          offsetX + 1230 * scale, offsetY + 850 * scale,
+          offsetX + 900 * scale, offsetY + 850 * scale,
+          offsetX + 800 * scale, offsetY + 700 * scale
+        );
+        this.outerPath.bezierCurveTo(
+          offsetX + 700 * scale, offsetY + 850 * scale,
+          offsetX + 370 * scale, offsetY + 850 * scale,
+          offsetX + 370 * scale, offsetY + 500 * scale
+        );
+
+        this.innerPath.moveTo(offsetX + 460 * scale, offsetY + 500 * scale);
+        this.innerPath.bezierCurveTo(
+          offsetX + 460 * scale, offsetY + 330 * scale,
+          offsetX + 650 * scale, offsetY + 330 * scale,
+          offsetX + 800 * scale, offsetY + 410 * scale
+        );
+        this.innerPath.bezierCurveTo(
+          offsetX + 950 * scale, offsetY + 330 * scale,
+          offsetX + 1140 * scale, offsetY + 330 * scale,
+          offsetX + 1140 * scale, offsetY + 500 * scale
+        );
+        this.innerPath.bezierCurveTo(
+          offsetX + 1140 * scale, offsetY + 670 * scale,
+          offsetX + 950 * scale, offsetY + 670 * scale,
+          offsetX + 800 * scale, offsetY + 590 * scale
+        );
+        this.innerPath.bezierCurveTo(
+          offsetX + 650 * scale, offsetY + 670 * scale,
+          offsetX + 460 * scale, offsetY + 670 * scale,
+          offsetX + 460 * scale, offsetY + 500 * scale
+        );
+
+        this.checkpoints = [];
+        for (let t = 0; t <= 1; t += 0.01) {
+          const point = this.getPointOnTrack(t);
+          this.checkpoints.push(point);
+        }
+        console.log("Track initialized with offsetX:", offsetX, "offsetY:", offsetY);
+      },
+      getPointOnTrack(t) {
+        const scale = 1.3;
+        const offsetX = (BASE_WIDTH - BASE_WIDTH * scale) / 2 + 160;
+        const offsetY = (BASE_HEIGHT - BASE_HEIGHT * scale) / 2 + 100;
+        const t1 = t % 0.25;
+        const seg = Math.floor(t / 0.25);
+        let xOuter, yOuter, xInner, yInner;
+        const u = t1 / 0.25;
+        if (seg === 0) {
+          xOuter = (1 - u) ** 3 * (370 * scale) + 3 * (1 - u) ** 2 * u * (370 * scale) + 3 * (1 - u) * u ** 2 * (700 * scale) + u ** 3 * (800 * scale);
+          yOuter = (1 - u) ** 3 * (500 * scale) + 3 * (1 - u) ** 2 * u * (150 * scale) + 3 * (1 - u) * u ** 2 * (150 * scale) + u ** 3 * (300 * scale);
+          xInner = (1 - u) ** 3 * (460 * scale) + 3 * (1 - u) ** 2 * u * (460 * scale) + 3 * (1 - u) * u ** 2 * (650 * scale) + u ** 3 * (800 * scale);
+          yInner = (1 - u) ** 3 * (500 * scale) + 3 * (1 - u) ** 2 * u * (330 * scale) + 3 * (1 - u) * u ** 2 * (330 * scale) + u ** 3 * (410 * scale);
+        } else if (seg === 1) {
+          xOuter = (1 - u) ** 3 * (800 * scale) + 3 * (1 - u) ** 2 * u * (900 * scale) + 3 * (1 - u) * u ** 2 * (1230 * scale) + u ** 3 * (1230 * scale);
+          yOuter = (1 - u) ** 3 * (300 * scale) + 3 * (1 - u) ** 2 * u * (150 * scale) + 3 * (1 - u) * u ** 2 * (150 * scale) + u ** 3 * (500 * scale);
+          xInner = (1 - u) ** 3 * (800 * scale) + 3 * (1 - u) ** 2 * u * (950 * scale) + 3 * (1 - u) * u ** 2 * (1140 * scale) + u ** 3 * (1140 * scale);
+          yInner = (1 - u) ** 3 * (410 * scale) + 3 * (1 - u) ** 2 * u * (330 * scale) + 3 * (1 - u) * u ** 2 * (330 * scale) + u ** 3 * (500 * scale);
+        } else if (seg === 2) {
+          xOuter = (1 - u) ** 3 * (1230 * scale) + 3 * (1 - u) ** 2 * u * (1230 * scale) + 3 * (1 - u) * u ** 2 * (900 * scale) + u ** 3 * (800 * scale);
+          yOuter = (1 - u) ** 3 * (500 * scale) + 3 * (1 - u) ** 2 * u * (850 * scale) + 3 * (1 - u) * u ** 2 * (850 * scale) + u ** 3 * (700 * scale);
+          xInner = (1 - u) ** 3 * (1140 * scale) + 3 * (1 - u) ** 2 * u * (1140 * scale) + 3 * (1 - u) * u ** 2 * (950 * scale) + u ** 3 * (800 * scale);
+          yInner = (1 - u) ** 3 * (500 * scale) + 3 * (1 - u) ** 2 * u * (670 * scale) + 3 * (1 - u) * u ** 2 * (670 * scale) + u ** 3 * (590 * scale);
+        } else {
+          xOuter = (1 - u) ** 3 * (800 * scale) + 3 * (1 - u) ** 2 * u * (700 * scale) + 3 * (1 - u) * u ** 2 * (370 * scale) + u ** 3 * (370 * scale);
+          yOuter = (1 - u) ** 3 * (700 * scale) + 3 * (1 - u) ** 2 * u * (850 * scale) + 3 * (1 - u) * u ** 2 * (850 * scale) + u ** 3 * (500 * scale);
+          xInner = (1 - u) ** 3 * (800 * scale) + 3 * (1 - u) ** 2 * u * (650 * scale) + 3 * (1 - u) * u ** 2 * (460 * scale) + u ** 3 * (460 * scale);
+          yInner = (1 - u) ** 3 * (590 * scale) + 3 * (1 - u) ** 2 * u * (670 * scale) + 3 * (1 - u) * u ** 2 * (670 * scale) + u ** 3 * (500 * scale);
+        }
+        const point = { x: offsetX + (xOuter + xInner) / 2, y: offsetY + (yOuter + yInner) / 2 };
+        return point;
+      },
+      draw() {
+        ctx.save();
+        ctx.fillStyle = "#2e7d32";
+        ctx.fillRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+        ctx.fillStyle = "#424242";
+        ctx.fill(this.outerPath);
+        ctx.fillStyle = "#4caf50";
+        ctx.fill(this.innerPath);
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 8;
+        ctx.setLineDash([15, 15]);
+        ctx.stroke(this.outerPath);
+        ctx.stroke(this.innerPath);
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#616161";
+        ctx.fillRect(this.crossover.x - 65, this.crossover.y - 65, 130, 130);
+        ctx.strokeStyle = "#ffd700";
+        ctx.lineWidth = 5;
+        ctx.strokeRect(this.crossover.x - 65, this.crossover.y - 65, 130, 130);
+        const squareSize = 13;
+        for (let y = this.startLine.y1; y < this.startLine.y2; y += squareSize) {
+          for (let x = this.startLine.x1 - 26; x < this.startLine.x1 + 26; x += squareSize) {
+            ctx.fillStyle = ((x + y) / squareSize) % 2 === 0 ? "white" : "black";
+            ctx.fillRect(x, y, squareSize, squareSize);
+          }
+        }
+        const treeScale = 1.3;
+        const offsetX = (BASE_WIDTH - BASE_WIDTH * scale) / 2 + 160;
+        const offsetY = (BASE_HEIGHT - BASE_HEIGHT * scale) / 2 + 100;
+        const treePositions = [
+          { x: 300 * treeScale, y: 100 * treeScale }, { x: 300 * treeScale, y: 900 * treeScale },
+          { x: 1300 * treeScale, y: 100 * treeScale }, { x: 1300 * treeScale, y: 900 * treeScale },
+          { x: 550 * treeScale, y: 50 * treeScale }, { x: 1050 * treeScale, y: 50 * treeScale },
+          { x: 550 * treeScale, y: 950 * treeScale }, { x: 1050 * treeScale, y: 950 * treeScale }
+        ];
+        treePositions.forEach(pos => {
+          ctx.fillStyle = "#2e4d1f";
+          ctx.fillRect(offsetX + pos.x - 5 * treeScale, offsetY + pos.y - 10 * treeScale, 10 * treeScale, 20 * treeScale);
+          ctx.fillStyle = "#1b5e20";
+          ctx.beginPath();
+          ctx.arc(offsetX + pos.x, offsetY + pos.y - 20 * treeScale, 20 * treeScale, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.restore();
+        console.log("Track drawn");
+      }
+    };
+
+    class Car {
+      constructor(x, y, color, isAI = false) {
+        this.x = x;
+        this.y = y;
+        this.angle = 0;
+        this.speed = isAI ? 3 : 0;
+        this.baseMaxSpeed = isAI ? 5 : 7;
+        this.maxSpeed = this.baseMaxSpeed;
+        this.baseAcceleration = isAI ? 0.05 : 0.08;
+        this.acceleration = this.baseAcceleration;
+        this.friction = isAI ? 0.98 : 0.95;
+        this.color = color;
+        this.isAI = isAI;
+        this.laps = 0;
+        this.crashed = false;
+        this.z = 0;
+        this.lapCooldown = false;
+        this.pathT = isAI ? 0.02 : 0;
+        console.log(`Car initialized: ${color} at (${this.x}, ${this.y})`);
+      }
+
+      update(cars) {
+        if (!gameStarted || this.crashed) {
+          console.log(`Skipping update for ${this.color} car: gameStarted=${gameStarted}, crashed=${this.crashed}`);
+          return;
+        }
+
+        if (this.isAI) {
+          if (this.lapCooldown) {
+            this.maxSpeed = this.baseMaxSpeed * (0.9 + Math.random() * 0.2);
+            this.acceleration = this.baseAcceleration * (0.9 + Math.random() * 0.2);
+          }
+          this.pathT += 0.002 * (this.maxSpeed / 5);
+          if (this.pathT > 1) this.pathT -= 1;
+          const target = track.getPointOnTrack(this.pathT);
+          this.x = target.x;
+          this.y = target.y;
+          const nextT = (this.pathT + 0.01) % 1;
+          const nextPoint = track.getPointOnTrack(nextT);
+          this.angle = Math.atan2(nextPoint.y - this.y, nextPoint.x - this.x);
+          this.z = this.pathT % 0.5 < 0.25 ? 1 : -1;
+
+          cars.forEach(other => {
+            if (other !== this) {
+              const dx = this.x - other.x;
+              const dy = this.y - other.y;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              if (distance < 50 && distance > 0) {
+                this.speed *= 0.95;
+              }
+            }
+          });
+        } else {
+          if (keys.ArrowUp) this.speed = Math.min(this.speed + this.acceleration, this.maxSpeed);
+          if (keys.ArrowDown) this.speed = Math.max(this.speed - this.acceleration, -this.maxSpeed / 2);
+          if (keys.ArrowLeft) this.angle -= 0.07 * (this.speed / this.maxSpeed);
+          if (keys.ArrowRight) this.angle += 0.07 * (this.speed / this.maxSpeed);
+          this.speed *= this.friction;
+
+          const newX = this.x + Math.cos(this.angle) * this.speed;
+          const newY = this.y + Math.sin(this.angle) * this.speed;
+
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          const carScale = 1.3;
+          const pointsToCheck = [
+            { x: newX, y: newY },
+            { x: newX + 20 * carScale, y: newY },
+            { x: newX - 20 * carScale, y: newY },
+            { x: newX, y: newY + 12 * carScale },
+            { x: newX, y: newY - 12 * carScale }
+          ];
+          let onTrack = false;
+          for (let point of pointsToCheck) {
+            if (ctx.isPointInPath(track.outerPath, point.x, point.y) &&
+                !ctx.isPointInPath(track.innerPath, point.x, point.y)) {
+              onTrack = true;
+              break;
+            }
+          }
+          if (onTrack) {
+            this.x = newX;
+            this.y = newY;
+          } else {
+            this.speed *= 0.5;
+            crashSound.play();
+          }
+          ctx.restore();
+          console.log(`Player position: (${this.x}, ${this.y}), onTrack: ${onTrack}`);
+
+          cars.forEach(other => {
+            if (other !== this) {
+              const dx = this.x - other.x;
+              const dy = this.y - other.y;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              if (distance < 30 * carScale) {
+                this.speed *= 0.7;
+                other.speed *= 0.7;
+                crashSound.play();
+              }
+            }
+          });
+
+          if (this.x > track.startLine.x1 - 5 && this.x < track.startLine.x1 + 5 &&
+              this.y > track.startLine.y1 && this.y < track.startLine.y2 && !this.lapCooldown) {
+            this.laps++;
+            this.lapCooldown = true;
+            lapSound.play();
+            setTimeout(() => (this.lapCooldown = false), 3000);
+          }
+        }
+      }
+
+      draw() {
+        if (!gameStarted || this.crashed) {
+          console.log(`Skipping draw for ${this.color} car: gameStarted=${gameStarted}, crashed=${this.crashed}`);
+          return;
+        }
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        const carScale = 1.3;
+        
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 2 * carScale;
+        ctx.beginPath();
+        ctx.moveTo(-30 * carScale, -12 * carScale);
+        ctx.lineTo(30 * carScale, -12 * carScale);
+        ctx.lineTo(25 * carScale, 12 * carScale);
+        ctx.lineTo(-25 * carScale, 12 * carScale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "black";
+        ctx.beginPath();
+        ctx.arc(-20 * carScale, -12 * carScale, 8 * carScale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(-20 * carScale, 12 * carScale, 8 * carScale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(20 * carScale, -12 * carScale, 5 * carScale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(20 * carScale, 12 * carScale, 5 * carScale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "black";
+        ctx.beginPath();
+        ctx.moveTo(-30 * carScale, -12 * carScale);
+        ctx.lineTo(-35 * carScale, -18 * carScale);
+        ctx.lineTo(-25 * carScale, -18 * carScale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-30 * carScale, 12 * carScale);
+        ctx.lineTo(-35 * carScale, 18 * carScale);
+        ctx.lineTo(-25 * carScale, 18 * carScale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#333";
+        ctx.beginPath();
+        ctx.moveTo(-10 * carScale, -8 * carScale);
+        ctx.lineTo(0 * carScale, -8 * carScale);
+        ctx.lineTo(0 * carScale, 8 * carScale);
+        ctx.lineTo(-10 * carScale, 8 * carScale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.restore();
+        console.log(`Drew ${this.color} car at (${this.x}, ${this.y})`);
+      }
+    }
+
+    const offsetX = (BASE_WIDTH - BASE_WIDTH * 1.3) / 2 + 160;
+    const offsetY = (BASE_HEIGHT - BASE_HEIGHT * 1.3) / 2 + 100;
+    const player = new Car(offsetX + 400 * 1.3, offsetY + 490 * 1.3, "red", false);
+    const ai1 = new Car(offsetX + 415 * 1.3, offsetY + 490 * 1.3, "blue", true);
+    const cars = [player, ai1];
+
+    const keys = {};
+    window.addEventListener("keydown", (e) => {
+      console.log("Keydown event:", e.key);
+      if (!gameStarted) {
+        gameStarted = true;
+        document.getElementById("leaderboard").style.display = "block";
+        engineSound.play().catch(err => console.error("Audio play failed:", err));
+      }
+      keys[e.key] = true;
+      e.preventDefault();
+    });
+    window.addEventListener("keyup", (e) => {
+      keys[e.key] = false;
+      e.preventDefault();
+    });
+    // Fallback click event for Chrome compatibility
+    canvas.addEventListener("click", () => {
+      console.log("Canvas clicked, starting game");
+      if (!gameStarted) {
+        gameStarted = true;
+        document.getElementById("leaderboard").style.display = "block";
+        engineSound.play().catch(err => console.error("Audio play failed:", err));
+      }
+    });
+
+    const lapSound = new Audio("https://cdn.pixabay.com/download/audio/2022/02/23/audio_9630dbf1b3.mp3?filename=correct-2-46134.mp3");
+    const engineSound = new Audio("https://cdn.pixabay.com/download/audio/2022/03/15/audio_775865132b.mp3?filename=car-engine-loop-112768.mp3");
+    const crashSound = new Audio("https://cdn.pixabay.com/download/audio/2023/02/28/audio_4f6e297f25.mp3?filename=car-crash-101294.mp3");
+    engineSound.loop = true;
+    engineSound.volume = 0.3;
+
+    let cameraX = 0, cameraY = 0;
+    function updateCamera() {
+      if (!gameStarted) return;
+      cameraX = player.x - BASE_WIDTH / 2;
+      cameraY = player.y - BASE_HEIGHT / 2;
+      cameraX = Math.max(0, Math.min(cameraX, BASE_WIDTH));
+      cameraY = Math.max(0, Math.min(cameraY, BASE_HEIGHT));
+      console.log(`Camera updated: (${cameraX}, ${cameraY})`);
+    }
+
+    function updateLeaderboard() {
+      if (!gameStarted) return;
+      const div = document.getElementById("leaderboard");
+      const sorted = [...cars].sort((a, b) => b.laps - a.laps);
+      div.innerHTML = "<b>Leaderboard</b><br>" +
+        sorted.map((c, i) => `${i + 1}. ${c.color.toUpperCase()}: ${c.laps} lap(s)`).join("<br>");
+    }
+
+    function drawStartScreen() {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "white";
+      ctx.font = "40px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Press Any Key or Click to Start", canvas.width / 2, canvas.height / 2);
+      ctx.restore();
+      console.log("Start screen drawn");
+    }
+
+    function gameLoop() {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.scale(scaleFactor, scaleFactor);
+      if (!gameStarted) {
+        drawStartScreen();
+        ctx.restore();
+        requestAnimationFrame(gameLoop);
+        return;
+      }
+      updateCamera();
+      ctx.translate(-cameraX, -cameraY);
+      track.draw();
+      cars.sort((a, b) => a.z - b.z);
+      cars.forEach(car => {
+        car.update(cars);
+        car.draw();
+      });
+      ctx.restore();
+      updateLeaderboard();
+      requestAnimationFrame(gameLoop);
+      console.log("Game loop executed, gameStarted:", gameStarted);
+    }
+
+    track.init();
+    gameLoop();
+  </script>
+</body>
+</html>
