@@ -3,331 +3,399 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>4-Car Racing Game with Realistic Cars & Larger Track</title>
+<title>League Racing</title>
 <style>
-  body {
-    margin: 0;
-    background: #121212;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    overflow: hidden;
-    user-select: none;
-    font-family: Arial, sans-serif;
-    color: #eee;
-  }
-  #instructions {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    background: rgba(0,0,0,0.5);
-    padding: 10px 15px;
-    border-radius: 8px;
-    max-width: 350px;
-    font-size: 14px;
-    line-height: 1.3;
-    z-index: 10;
-  }
-  canvas {
-    background-color: #2c2c2c;
-    border-radius: 12px;
-    box-shadow: 0 0 15px #000;
-  }
+    body {
+        margin: 0;
+        background: #121212;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        overflow: hidden;
+        user-select: none;
+        font-family: Arial, sans-serif;
+        color: #eee;
+    }
+    #instructions {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: rgba(0,0,0,0.5);
+        padding: 10px 15px;
+        border-radius: 8px;
+        max-width: 350px;
+        font-size: 14px;
+        line-height: 1.3;
+        z-index: 10;
+    }
+    canvas {
+        background-color: #2c2c2c;
+        border-radius: 12px;
+        box-shadow: 0 0 15px #000;
+    }
+    h1 {
+        position: absolute;
+        top: 10px;
+        right: 20px;
+        color: #eee;
+        font-size: 3em;
+        text-shadow: 2px 2px 5px rgba(0,0,0,0.7);
+        z-index: 10;
+    }
 </style>
 </head>
 <body>
 
+<h1 id="gameTitle">League Racing</h1>
+
 <div id="instructions">
-  <strong>Controls for 4 Cars:</strong>
-  <ul>
-    <li><b>Car 1:</b> W (accelerate), S (brake), A (left), D (right)</li>
-    <li><b>Car 2:</b> I (accelerate), K (brake), J (left), L (right)</li>
-    <li><b>Car 3:</b> ↑ (accelerate), ↓ (brake), ← (left), → (right)</li>
-    <li><b>Car 4:</b> O (accelerate), P (brake), N (left), M (right)</li>
-  </ul>
+    <strong>Controls:</strong>
+    <ul>
+        <li><b>Your Car:</b> ↑ (accelerate), ↓ (brake), ← (left), → (right)</li>
+        <li><b>AI Car:</b> Auto-running at medium speed</li>
+    </ul>
+    <p>Press any key to start the race! 🏁</p>
 </div>
 
 <canvas id="gameCanvas" width="1100" height="700"></canvas>
 
 <script>
 (() => {
-  const canvas = document.getElementById('gameCanvas');
-  const ctx = canvas.getContext('2d');
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
 
-  let gameStarted = false;
+    let gameStarted = false;
 
-  // Larger, more complex track control points (around canvas)
-  const trackPoints = [
-    {x: 550, y: 150},
-    {x: 850, y: 130},
-    {x: 980, y: 300},
-    {x: 900, y: 500},
-    {x: 750, y: 600},
-    {x: 500, y: 650},
-    {x: 300, y: 600},
-    {x: 150, y: 450},
-    {x: 200, y: 350},
-    {x: 350, y: 250},
-    {x: 480, y: 250}
-  ];
+    const trackPoints = [
+        {x: 550, y: 150}, {x: 850, y: 130}, {x: 980, y: 300},
+        {x: 900, y: 500}, {x: 750, y: 600}, {x: 500, y: 650},
+        {x: 300, y: 600}, {x: 150, y: 450}, {x: 200, y: 350},
+        {x: 350, y: 250}, {x: 480, y: 250}
+    ];
 
-  const trackWidth = 110;
-  const carLength = 50;
-  const carWidth = 24;
-  const wheelRadius = 6;
-  const numCars = 4;
+    const trackWidth = 110;
+    const carLength = 50;
+    const carWidth = 24;
+    const wheelRadius = 6;
 
-  const controls = [
-    {accelerate: 'w', brake: 's', left: 'a', right: 'd'},
-    {accelerate: 'i', brake: 'k', left: 'j', right: 'l'},
-    {accelerate: 'arrowup', brake: 'arrowdown', left: 'arrowleft', right: 'arrowright'},
-    {accelerate: 'o', brake: 'p', left: 'n', right: 'm'}
-  ];
+    const controls = [
+        {accelerate: 'arrowup', brake: 'arrowdown', left: 'arrowleft', right: 'arrowright'}
+    ];
 
-  const carColors = ['#e63946', '#457b9d', '#f4a261', '#2a9d8f'];
+    const carColors = ['#e63946', '#457b9d'];
 
-  function catmullRom(t, p0, p1, p2, p3) {
-    const v0 = (p2 - p0) * 0.5;
-    const v1 = (p3 - p1) * 0.5;
-    return (2*p1 - 2*p2 + v0 + v1)*t*t*t + (-3*p1 + 3*p2 - 2*v0 - v1)*t*t + v0*t + p1;
-  }
-
-  function generateSplinePoints(points, segments) {
-    const result = [];
-    for(let i = 0; i < points.length; i++) {
-      const p0 = points[(i - 1 + points.length) % points.length];
-      const p1 = points[i];
-      const p2 = points[(i + 1) % points.length];
-      const p3 = points[(i + 2) % points.length];
-
-      for(let t = 0; t < 1; t += 1 / segments) {
-        const x = catmullRom(t, p0.x, p1.x, p2.x, p3.x);
-        const y = catmullRom(t, p0.y, p1.y, p2.y, p3.y);
-        result.push({x, y});
-      }
-    }
-    return result;
-  }
-
-  const centerLine = generateSplinePoints(trackPoints, 60);
-
-  function calculateNormals(points) {
-    const normals = [];
-    for(let i=0; i < points.length; i++) {
-      const p1 = points[i];
-      const p2 = points[(i+1) % points.length];
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const len = Math.sqrt(dx*dx + dy*dy);
-      normals.push({nx: -dy / len, ny: dx / len});
-    }
-    return normals;
-  }
-
-  const normals = calculateNormals(centerLine);
-
-  const keys = {};
-  window.addEventListener('keydown', e => {
-    if(!gameStarted) {
-      gameStarted = true;
-    }
-    keys[e.key.toLowerCase()] = true;
-  });
-  window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-
-  class Car {
-    constructor(color, positionIndex, controls) {
-      this.color = color;
-      this.positionIndex = positionIndex;
-      this.controls = controls;
-      this.speed = 0;
-      this.maxSpeed = 5;
-      this.acceleration = 0.14;
-      this.friction = 0.05;
-      this.angle = 0;
-      this.turnSpeed = 0.045;
-      this.width = carWidth;
-      this.length = carLength;
+    function catmullRom(t, p0, p1, p2, p3) {
+        const v0 = (p2 - p0) * 0.5;
+        const v1 = (p3 - p1) * 0.5;
+        return (2*p1 - 2*p2 + v0 + v1)*t*t*t + (-3*p1 + 3*p2 - 2*v0 - v1)*t*t + v0*t + p1;
     }
 
-    update() {
-      if (!gameStarted) return;
+    function generateSplinePoints(points, segments) {
+        const result = [];
+        for(let i = 0; i < points.length; i++) {
+            const p0 = points[(i - 1 + points.length) % points.length];
+            const p1 = points[i];
+            const p2 = points[(i + 1) % points.length];
+            const p3 = points[(i + 2) % points.length];
 
-      if (keys[this.controls.accelerate]) {
-        this.speed += this.acceleration;
-      } else if (keys[this.controls.brake]) {
-        this.speed -= this.acceleration;
-      } else {
-        if (this.speed > 0) this.speed -= this.friction;
-        else if (this.speed < 0) this.speed += this.friction;
-        if (Math.abs(this.speed) < this.friction) this.speed = 0;
-      }
-
-      this.speed = Math.min(this.speed, this.maxSpeed);
-      this.speed = Math.max(this.speed, -this.maxSpeed/2);
-
-      if (Math.abs(this.speed) > 0.1) {
-        if (keys[this.controls.left]) {
-          this.angle -= this.turnSpeed * (this.speed / this.maxSpeed);
+            for(let t = 0; t < 1; t += 1 / segments) {
+                const x = catmullRom(t, p0.x, p1.x, p2.x, p3.x);
+                const y = catmullRom(t, p0.y, p1.y, p2.y, p3.y);
+                result.push({x, y});
+            }
         }
-        if (keys[this.controls.right]) {
-          this.angle += this.turnSpeed * (this.speed / this.maxSpeed);
-        }
-      }
-
-      this.positionIndex += this.speed;
-      if (this.positionIndex >= centerLine.length) this.positionIndex -= centerLine.length;
-      if (this.positionIndex < 0) this.positionIndex += centerLine.length;
-
-      const idx = Math.floor(this.positionIndex) % centerLine.length;
-      const nextIdx = (idx + 1) % centerLine.length;
-
-      this.pos = centerLine[idx];
-      this.nextPos = centerLine[nextIdx];
-      this.trackAngle = Math.atan2(this.nextPos.y - this.pos.y, this.nextPos.x - this.pos.x);
+        return result;
     }
 
-    draw() {
-      const idx = Math.floor(this.positionIndex) % normals.length;
-      const normal = normals[idx];
+    const centerLine = generateSplinePoints(trackPoints, 60);
 
-      // Side offset to separate cars
-      const offset = Math.sin(this.angle - this.trackAngle) * trackWidth / 3 + this.sideOffset;
+    function calculateNormals(points) {
+        const normals = [];
+        for(let i=0; i < points.length; i++) {
+            const p1 = points[i];
+            const p2 = points[(i+1) % points.length];
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const len = Math.sqrt(dx*dx + dy*dy);
+            if (len === 0) {
+                normals.push({nx: 0, ny: 0});
+            } else {
+                normals.push({nx: -dy / len, ny: dx / len});
+            }
+        }
+        return normals;
+    }
 
-      const cx = this.pos.x + normal.nx * offset;
-      const cy = this.pos.y + normal.ny * offset;
+    const normals = calculateNormals(centerLine);
 
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(this.angle);
+    const keys = {};
+    window.addEventListener('keydown', e => {
+        if(!gameStarted) {
+            gameStarted = true;
+        }
+        keys[e.key.toLowerCase()] = true;
+    });
+    window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
-      // Car body with gradient
-      let grad = ctx.createLinearGradient(-this.length/2, 0, this.length/2, 0);
-      grad.addColorStop(0, '#222');
-      grad.addColorStop(0.5, this.color);
-      grad.addColorStop(1, '#222');
-      ctx.fillStyle = grad;
+    class Car {
+        constructor(color, positionIndex, controls = null) {
+            this.color = color;
+            this.positionIndex = positionIndex;
+            this.controls = controls;
+            this.speed = 0;
+            this.maxSpeed = 5;
+            this.acceleration = 0.14;
+            this.friction = 0.05;
+            this.angle = 0;
+            this.turnSpeed = 0.045;
+            this.width = carWidth;
+            this.length = carLength;
+            this.sideOffset = 0; 
+        }
 
-      ctx.beginPath();
-      ctx.moveTo(this.length/2, 0);
-      ctx.lineTo(this.length/2 - 15, -this.width/2);
-      ctx.lineTo(-this.length/2, -this.width/2);
-      ctx.lineTo(-this.length/2, this.width/2);
-      ctx.lineTo(this.length/2 - 15, this.width/2);
-      ctx.closePath();
-      ctx.fill();
+        update() {
+            if (!gameStarted) return; // This check is important for ALL cars
 
-      // Windows
-      ctx.fillStyle = 'rgba(173,216,230,0.7)';
-      ctx.fillRect(this.length/2 - 30, -this.width/4, 25, this.width/2);
+            if (this.controls) { // Player Car Controls
+                if (keys[this.controls.accelerate]) {
+                    this.speed += this.acceleration;
+                } else if (keys[this.controls.brake]) {
+                    this.speed -= this.acceleration;
+                } else {
+                    if (this.speed > 0) this.speed -= this.friction;
+                    else if (this.speed < 0) this.speed += this.friction;
+                    if (Math.abs(this.speed) < this.friction) this.speed = 0;
+                }
 
-      // Draw 4 wheels
-      ctx.fillStyle = '#111';
-      const wheelPositions = [
-        {x: -this.length/3, y: -this.width/2 - wheelRadius + 2}, // front-left
-        {x: -this.length/3, y: this.width/2 + wheelRadius - 2},  // front-right
-        {x: this.length/3, y: -this.width/2 - wheelRadius + 2},  // rear-left
-        {x: this.length/3, y: this.width/2 + wheelRadius - 2}    // rear-right
-      ];
+                this.speed = Math.min(this.speed, this.maxSpeed);
+                this.speed = Math.max(this.speed, -this.maxSpeed/2);
 
-      wheelPositions.forEach(pos => {
+                if (Math.abs(this.speed) > 0.1) {
+                    if (keys[this.controls.left]) {
+                        this.angle -= this.turnSpeed * (this.speed / this.maxSpeed);
+                    }
+                    if (keys[this.controls.right]) {
+                        this.angle += this.turnSpeed * (this.speed / this.maxSpeed);
+                    }
+                }
+            }
+
+            this.positionIndex += this.speed;
+            if (this.positionIndex >= centerLine.length) this.positionIndex -= centerLine.length;
+            if (this.positionIndex < 0) this.positionIndex += centerLine.length;
+
+            const idx = Math.floor(this.positionIndex) % centerLine.length;
+            const nextIdx = (idx + 1) % centerLine.length;
+
+            this.pos = centerLine[idx];
+            this.nextPos = centerLine[nextIdx];
+            
+            if (!this.pos || !this.nextPos) {
+                 this.trackAngle = this.angle; 
+            } else {
+                this.trackAngle = Math.atan2(this.nextPos.y - this.pos.y, this.nextPos.x - this.pos.x);
+            }
+            
+            this.angle += (this.trackAngle - this.angle) * 0.1;
+        }
+
+        draw() {
+            if (!this.pos || typeof this.pos.x !== 'number' || typeof this.pos.y !== 'number' || isNaN(this.angle) || isNaN(this.pos.x) || isNaN(this.pos.y)) {
+                return;
+            }
+
+            const idx = Math.floor(this.positionIndex) % normals.length;
+            const normal = normals[idx];
+
+            if (!normal || typeof normal.nx !== 'number' || typeof normal.ny !== 'number' || isNaN(normal.nx) || isNaN(normal.ny)) {
+                return;
+            }
+
+            const effectiveSideOffset = typeof this.sideOffset === 'number' ? this.sideOffset : 0;
+            const offset = Math.sin(this.angle - this.trackAngle) * trackWidth / 3 + effectiveSideOffset;
+            
+            if (isNaN(offset)) {
+                 return;
+            }
+
+            const cx = this.pos.x + normal.nx * offset;
+            const cy = this.pos.y + normal.ny * offset;
+
+            if (isNaN(cx) || isNaN(cy)) {
+                return;
+            }
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(this.angle);
+
+            let grad = ctx.createLinearGradient(-this.length/2, 0, this.length/2, 0);
+            grad.addColorStop(0, '#222');
+            grad.addColorStop(0.5, this.color);
+            grad.addColorStop(1, '#222');
+            ctx.fillStyle = grad;
+
+            ctx.beginPath();
+            ctx.moveTo(this.length/2, 0);
+            ctx.lineTo(this.length/2 - 15, -this.width/2);
+            ctx.lineTo(-this.length/2, -this.width/2);
+            ctx.lineTo(-this.length/2, this.width/2);
+            ctx.lineTo(this.length/2 - 15, this.width/2);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(173,216,230,0.7)';
+            ctx.fillRect(this.length/2 - 30, -this.width/4, 25, this.width/2);
+
+            ctx.fillStyle = '#111';
+            const wheelPositions = [
+                {x: -this.length/3, y: -this.width/2 - wheelRadius + 2},
+                {x: -this.length/3, y: this.width/2 + wheelRadius - 2},
+                {x: this.length/3, y: -this.width/2 - wheelRadius + 2},
+                {x: this.length/3, y: this.width/2 + wheelRadius - 2}
+            ];
+
+            wheelPositions.forEach(pos => {
+                ctx.beginPath();
+                ctx.ellipse(pos.x, pos.y, wheelRadius, wheelRadius * 0.6, 0, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            ctx.restore();
+        }
+    }
+
+    class AICar extends Car {
+        constructor(color, positionIndex) {
+            super(color, positionIndex, null);
+            this.maxSpeed = 3.5;
+            this.acceleration = 0.1;
+            this.friction = 0.05;
+            this.turnSpeed = 0.035;
+            this.sideOffset = (carWidth + 12) / 2;
+        }
+
+        update() {
+            // New debug line: Check if AI car update is being called at all
+            console.log(`AI Car Update Called! gameStarted: ${gameStarted}`); 
+
+            if (!gameStarted) return;
+
+            this.speed += this.acceleration;
+            this.speed = Math.min(this.speed, this.maxSpeed);
+            this.speed = Math.max(0, this.speed); 
+
+            this.positionIndex += this.speed;
+            if (this.positionIndex >= centerLine.length) this.positionIndex -= centerLine.length;
+            if (this.positionIndex < 0) this.positionIndex += centerLine.length;
+
+            const idx = Math.floor(this.positionIndex) % centerLine.length;
+            const nextIdx = (idx + 1) % centerLine.length;
+
+            this.pos = centerLine[idx];
+            this.nextPos = centerLine[nextIdx];
+            
+            if (!this.pos || !this.nextPos) {
+                 this.trackAngle = this.angle; 
+            } else {
+                this.trackAngle = Math.atan2(this.nextPos.y - this.pos.y, this.nextPos.x - this.pos.x);
+            }
+            
+            this.angle += (this.trackAngle - this.angle) * 0.05;
+
+            // Debugging AI Car's speed and position update
+            console.log(`AI Car State: Speed=${this.speed.toFixed(2)}, PosIndex=${this.positionIndex.toFixed(2)}`);
+        }
+    }
+
+    const startLineIndex = 20;
+
+    const cars = [];
+    cars.push(new Car(carColors[0], startLineIndex, controls[0]));
+    cars[0].sideOffset = -(carWidth + 12) / 2;
+
+    cars.push(new AICar(carColors[1], startLineIndex)); 
+
+
+    function drawTree(x, y, scale = 1) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(scale, scale);
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(-8, -25, 16, 25);
+        ctx.fillStyle = '#228B22';
         ctx.beginPath();
-        ctx.ellipse(pos.x, pos.y, wheelRadius, wheelRadius * 0.6, 0, 0, Math.PI * 2);
-        ctx.fill();
-      });
-
-      ctx.restore();
+        ctx.moveTo(0, -70); ctx.lineTo(-30, -30); ctx.lineTo(30, -30); ctx.closePath(); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(0, -50); ctx.lineTo(-25, -10); ctx.lineTo(25, -10); ctx.closePath(); ctx.fill();
+        ctx.restore();
     }
-  }
 
-  const startLineIndex = 20;
+    const trees = [
+        {x: 550, y: 350, scale: 1}, {x: 700, y: 250, scale: 0.8}, {x: 300, y: 450, scale: 1.2},
+        {x: 1000, y: 200, scale: 1.1}, {x: 80, y: 600, scale: 0.9}
+    ];
 
-  const cars = [];
-  for(let i=0; i < numCars; i++) {
-    const spacing = (i - (numCars - 1)/2) * (carWidth + 12);
-    cars.push(new Car(carColors[i], startLineIndex, controls[i]));
-    cars[i].sideOffset = spacing;
-  }
+    function drawTrack() {
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        for(let i=0; i < centerLine.length; i++) {
+            const p = centerLine[i]; const n = normals[i];
+            const leftX = p.x + n.nx * (trackWidth / 2); const leftY = p.y + n.ny * (trackWidth / 2);
+            if(i === 0) ctx.moveTo(leftX, leftY); else ctx.lineTo(leftX, leftY);
+        }
+        for(let i = centerLine.length - 1; i >= 0; i--) {
+            const p = centerLine[i]; const n = normals[i];
+            const rightX = p.x - n.nx * (trackWidth / 2); const rightY = p.y - n.ny * (trackWidth / 2);
+            ctx.lineTo(rightX, rightY);
+        }
+        ctx.closePath();
+        ctx.fillStyle = '#444'; ctx.fill();
 
-  function drawTrack() {
-    ctx.lineJoin = 'round';
+        ctx.beginPath();
+        for(let i=0; i < centerLine.length; i++) {
+            const p = centerLine[i];
+            if(i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+        }
+        ctx.strokeStyle = '#aaa'; ctx.lineWidth = 4; ctx.setLineDash([20, 25]); ctx.stroke(); ctx.setLineDash([]);
 
-    // Track edges
-    ctx.beginPath();
-    for(let i=0; i < centerLine.length; i++) {
-      const p = centerLine[i];
-      const n = normals[i];
-      const leftX = p.x + n.nx * (trackWidth / 2);
-      const leftY = p.y + n.ny * (trackWidth / 2);
-      if(i === 0) ctx.moveTo(leftX, leftY);
-      else ctx.lineTo(leftX, leftY);
+        const startP = centerLine[startLineIndex];
+        const startN = normals[startLineIndex];
+        const lineLength = trackWidth + 50;
+
+        ctx.strokeStyle = 'white'; ctx.lineWidth = 6; ctx.setLineDash([15, 15]);
+        ctx.beginPath();
+        ctx.moveTo(startP.x + startN.nx * lineLength/2, startP.y + startN.ny * lineLength/2);
+        ctx.lineTo(startP.x - startN.nx * lineLength/2, startP.y - startN.ny * lineLength/2);
+        ctx.stroke(); ctx.setLineDash([]);
     }
-    for(let i = centerLine.length - 1; i >= 0; i--) {
-      const p = centerLine[i];
-      const n = normals[i];
-      const rightX = p.x - n.nx * (trackWidth / 2);
-      const rightY = p.y - n.ny * (trackWidth / 2);
-      ctx.lineTo(rightX, rightY);
+
+    function drawStartScreen() {
+        ctx.fillStyle = '#2c2c2c'; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle = '#eee'; ctx.font = 'bold 40px Arial';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('Press any key to start', canvas.width/2, canvas.height/2);
     }
-    ctx.closePath();
-    ctx.fillStyle = '#444';
-    ctx.fill();
 
-    // Center dashed line
-    ctx.beginPath();
-    for(let i=0; i < centerLine.length; i++) {
-      const p = centerLine[i];
-      if(i === 0) ctx.moveTo(p.x, p.y);
-      else ctx.lineTo(p.x, p.y);
+    function gameLoop() {
+        if (!gameStarted) {
+            drawStartScreen();
+        } else {
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            drawTrack();
+            trees.forEach(tree => {
+                drawTree(tree.x, tree.y, tree.scale);
+            });
+            cars.forEach(car => {
+                car.update();
+                car.draw();
+            });
+        }
+        requestAnimationFrame(gameLoop);
     }
-    ctx.strokeStyle = '#aaa';
-    ctx.lineWidth = 4;
-    ctx.setLineDash([20, 25]);
-    ctx.stroke();
-    ctx.setLineDash([]);
 
-    // Starting line
-    const startP = centerLine[startLineIndex];
-    const startN = normals[startLineIndex];
-    const lineLength = trackWidth + 50;
-
-    ctx.strokeStyle = 'white';
-    ctx.lineWidth = 6;
-    ctx.setLineDash([15, 15]);
-    ctx.beginPath();
-    ctx.moveTo(startP.x + startN.nx * lineLength/2, startP.y + startN.ny * lineLength/2);
-    ctx.lineTo(startP.x - startN.nx * lineLength/2, startP.y - startN.ny * lineLength/2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
-  function drawStartScreen() {
-    ctx.fillStyle = '#2c2c2c';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-
-    ctx.fillStyle = '#eee';
-    ctx.font = 'bold 40px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('Press any key to start', canvas.width/2, canvas.height/2);
-  }
-
-  function gameLoop() {
-    if (!gameStarted) {
-      drawStartScreen();
-    } else {
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      drawTrack();
-      cars.forEach(car => {
-        car.update();
-        car.draw();
-      });
-    }
-    requestAnimationFrame(gameLoop);
-  }
-
-  gameLoop();
+    gameLoop();
 })();
 </script>
 
